@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Player InLead - TESTE</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+            background: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: Arial;
+        }
+        #interaction-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.05);
+            z-index: 999999;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #333;
+        }
+        #interaction-overlay.hidden {
+            display: none;
+        }
+        #audio-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: monospace;
+            z-index: 999998;
+            display: block;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        #controls {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            display: none;
+            z-index: 999997;
+        }
+        #controls.visible {
+            display: block;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background: #007bff;
+            color: white;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button.stop {
+            background: #dc3545;
+        }
+        button.stop:hover {
+            background: #c82333;
+        }
+    </style>
+</head>
+<body>
+    <div id="interaction-overlay">
+        👆 Clique em qualquer lugar para iniciar o áudio
+    </div>
+    
+    <div id="controls">
+        <button onclick="playAudio()">▶ Tocar Áudio</button>
+        <button onclick="stopAudio()" class="stop">⏹ Parar Áudio</button>
+    </div>
+    
+    <div id="audio-status">⏸ Aguardando interação...</div>
+    
+    <audio id="audio-player" preload="auto" style="display: none;">
+        <source src="https://raonygar.github.io/audio-inlead-codigo/Audio%20Depoimento%20-%20C%C3%B3digo.MP3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        const audio = document.getElementById('audio-player');
+        const overlay = document.getElementById('interaction-overlay');
+        const status = document.getElementById('audio-status');
+        const controls = document.getElementById('controls');
+        
+        let audioStarted = false;
+        
+        function updateStatus(message) {
+            status.textContent = message;
+            console.log(message);
+        }
+        
+        function playAudio() {
+            audio.currentTime = 0;
+            audio.play()
+                .then(() => {
+                    updateStatus('▶ Áudio tocando!');
+                })
+                .catch(err => {
+                    updateStatus('❌ Erro: ' + err.message);
+                });
+        }
+        
+        function stopAudio() {
+            audio.pause();
+            audio.currentTime = 0;
+            updateStatus('⏹ Áudio parado');
+        }
+        
+        async function startAudio() {
+            if (audioStarted) return;
+            
+            try {
+                audio.currentTime = 0;
+                audio.volume = 1.0;
+                
+                await audio.play();
+                
+                audioStarted = true;
+                overlay.classList.add('hidden');
+                controls.classList.add('visible');
+                updateStatus('▶ Áudio reproduzindo...');
+                
+            } catch (error) {
+                updateStatus('⚠ Autoplay bloqueado: ' + error.message);
+            }
+        }
+        
+        // Captura primeira interação
+        const interactionEvents = ['click', 'touchstart', 'mousedown'];
+        
+        function handleFirstInteraction() {
+            startAudio();
+            interactionEvents.forEach(event => {
+                document.removeEventListener(event, handleFirstInteraction, true);
+            });
+        }
+        
+        interactionEvents.forEach(event => {
+            document.addEventListener(event, handleFirstInteraction, true);
+        });
+        
+        // Eventos do áudio
+        audio.addEventListener('loadeddata', () => {
+            const duration = audio.duration.toFixed(0);
+            console.log('✓ Áudio carregado | Duração:', duration + 's');
+        });
+        
+        audio.addEventListener('timeupdate', () => {
+            if (audio.duration > 0) {
+                const current = audio.currentTime.toFixed(0);
+                const total = audio.duration.toFixed(0);
+                const percent = ((audio.currentTime / audio.duration) * 100).toFixed(0);
+                updateStatus(`▶ ${current}s / ${total}s (${percent}%)`);
+            }
+        });
+        
+        audio.addEventListener('ended', () => {
+            updateStatus('✓ Áudio finalizado');
+        });
+        
+        audio.addEventListener('error', (e) => {
+            updateStatus('❌ Erro ao carregar áudio');
+            console.error('Erro:', e);
+        });
+        
+        // Tentativa de autoplay
+        setTimeout(() => {
+            if (!audioStarted) {
+                updateStatus('👆 Clique para iniciar áudio');
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
