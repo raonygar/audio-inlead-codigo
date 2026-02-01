@@ -7,36 +7,26 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
-            width: 100%; 
-            height: 100vh; 
+            width: 1px; 
+            height: 1px; 
             overflow: hidden; 
             background: transparent; 
         }
-        #overlay {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: transparent;
-            z-index: 999999;
-            cursor: pointer;
-        }
-        #overlay.hide { display: none; }
     </style>
 </head>
 <body>
-    <div id="overlay"></div>
-    
     <audio id="audio" preload="auto">
         <source src="https://raonygar.github.io/audio-inlead-codigo/Audio%20Depoimento%20-%20C%C3%B3digo.MP3" type="audio/mpeg">
     </audio>
 
     <script>
         const audio = document.getElementById('audio');
-        const overlay = document.getElementById('overlay');
-        
         let playing = false;
+        let initialized = false;
         
-        function forcePlay() {
+        function play() {
+            if (playing) return;
+            
             audio.currentTime = 0;
             audio.volume = 1.0;
             audio.muted = false;
@@ -44,16 +34,30 @@
             audio.play()
                 .then(() => {
                     playing = true;
-                    overlay.className = 'hide';
+                    initialized = true;
                     console.log('✓ Áudio TOCANDO');
                     monitorButton();
                 })
                 .catch(err => {
-                    console.error('Erro ao tocar:', err);
+                    console.log('⚠ Tentando novamente...');
+                    // Tenta com muted primeiro
+                    audio.muted = true;
+                    audio.play().then(() => {
+                        setTimeout(() => {
+                            audio.muted = false;
+                            playing = true;
+                            initialized = true;
+                            console.log('✓ Áudio TOCANDO (unmuted)');
+                            monitorButton();
+                        }, 200);
+                    }).catch(() => {
+                        console.log('⚠ Aguardando interação do usuário');
+                    });
                 });
         }
         
-        function forceStop() {
+        function stop() {
+            if (!playing) return;
             audio.pause();
             audio.currentTime = 0;
             playing = false;
@@ -61,56 +65,125 @@
         }
         
         function monitorButton() {
-            // MutationObserver para DOM dinâmico
-            const observer = new MutationObserver(checkButton);
-            observer.observe(document.body, { 
-                childList: true, 
-                subtree: true 
-            });
-            
-            // Listener global para cliques
-            document.addEventListener('click', (e) => {
-                const target = e.target;
-                if (!target.matches('button, a, input[type="submit"], [role="button"]')) {
-                    return;
+            // Monitora no documento pai E no iframe
+            function checkInDocument(doc) {
+                try {
+                    const observer = new MutationObserver(() => findButton(doc));
+                    observer.observe(doc.body, { 
+                        childList: true, 
+                        subtree: true 
+                    });
+                    
+                    doc.addEventListener('click', (e) => {
+                        const target = e.target;
+                        if (!target.matches('button, a, input[type="submit"], [role="button"]')) {
+                            return;
+                        }
+                        
+                        const text = (target.textContent || target.value || '').toLowerCase();
+                        
+                        if ((text.includes('iniciar') && text.includes('test')) ||
+                            text === 'iniciar el test' ||
+                            text.includes('iniciar') && text.includes('el test')) {
+                            console.log('🎯 Botão detectado via listener!');
+                            stop();
+                        }
+                    }, true);
+                    
+                    findButton(doc);
+                } catch(e) {
+                    console.log('Sem acesso ao parent (cross-origin)');
                 }
-                
-                const text = (target.textContent || target.value || '').toLowerCase();
-                
-                if ((text.includes('iniciar') && text.includes('test')) ||
-                    text === 'iniciar el test' ||
-                    text === 'comenzar el test' ||
-                    text === 'empezar el test') {
-                    console.log('🎯 Botão "Iniciar el test" detectado!');
-                    forceStop();
+            }
+            
+            // Monitora no próprio iframe
+            checkInDocument(document);
+            
+            // Tenta monitorar no parent (se permitido)
+            try {
+                if (window.parent && window.parent.document) {
+                    checkInDocument(window.parent.document);
+                    console.log('🔍 Monitorando parent document');
+                }
+            } catch(e) {
+                console.log('🔍 Monitorando apenas iframe');
+            }
+        }
+        
+        function findButton(doc) {
+            try {
+                doc.querySelectorAll('button, a, input[type="submit"], [role="button"]').forEach(btn => {
+                    const text = (btn.textContent || btn.value || '').toLowerCase();
+                    
+                    if ((text.includes('iniciar') && text.includes('test')) ||
+                        text === 'iniciar el test' ||
+                        (text.includes('iniciar') && text.includes('el test'))) {
+                        if (!btn.dataset.audioListener) {
+                            btn.dataset.audioListener = '1';
+                            btn.addEventListener('click', () => {
+                                console.log('🎯 Botão clicado diretamente!');
+                                stop();
+                            }, true);
+                            console.log('✓ Botão "' + btn.textContent.trim() + '" anexado');
+                        }
+                    }
+                });
+            } catch(e) {}
+        }
+        
+        // Autoplay agressivo
+        function tryAutoplay() {
+            console.log('🚀 Tentando autoplay...');
+            
+            // Tentativa 1: Normal
+            audio.play()
+                .then(() => {
+                    playing = true;
+                    initialized = true;
+                    console.log('✓ Autoplay funcionou!');
+                    monitorButton();
+                })
+                .catch(() => {
+                    // Tentativa 2: Muted
+                    audio.muted = true;
+                    audio.volume = 0.01;
+                    audio.play()
+                        .then(() => {
+                            setTimeout(() => {
+                                audio.muted = false;
+                                audio.volume = 1.0;
+                                playing = true;
+                                initialized = true;
+                                console.log('✓ Autoplay muted funcionou!');
+                                monitorButton();
+                            }, 300);
+                        })
+                        .catch(() => {
+                            console.log('⚠ Aguardando primeira interação');
+                        });
+                });
+        }
+        
+        // Escuta mensagens do parent
+        window.addEventListener('message', (event) => {
+            if (event.data === 'play-audio') {
+                console.log('✓ Comando recebido: play');
+                play();
+            } else if (event.data === 'stop-audio') {
+                console.log('✓ Comando recebido: stop');
+                stop();
+            }
+        });
+        
+        // Captura interações no próprio iframe
+        ['click', 'touchstart', 'mousedown', 'keydown'].forEach(eventType => {
+            document.addEventListener(eventType, function handler() {
+                if (!initialized) {
+                    console.log('✓ Interação detectada:', eventType);
+                    play();
                 }
             }, true);
-            
-            checkButton();
-            console.log('🔍 Monitorando botão "Iniciar el test"');
-        }
-        
-        function checkButton() {
-            document.querySelectorAll('button, a, input[type="submit"], [role="button"]').forEach(btn => {
-                const text = (btn.textContent || btn.value || '').toLowerCase();
-                
-                if ((text.includes('iniciar') && text.includes('test')) ||
-                    text === 'iniciar el test') {
-                    if (!btn.dataset.audioListener) {
-                        btn.dataset.audioListener = '1';
-                        btn.addEventListener('click', () => {
-                            console.log('🎯 Botão clicado!');
-                            forceStop();
-                        }, true);
-                        console.log('✓ Botão encontrado e anexado');
-                    }
-                }
-            });
-        }
-        
-        // Captura primeira interação
-        overlay.addEventListener('click', forcePlay);
-        overlay.addEventListener('touchstart', forcePlay);
+        });
         
         // Eventos do áudio
         audio.addEventListener('ended', () => {
@@ -119,14 +192,26 @@
         });
         
         audio.addEventListener('error', (e) => {
-            console.error('❌ Erro ao carregar áudio:', e);
+            console.error('❌ Erro:', e);
         });
         
         audio.addEventListener('loadeddata', () => {
             console.log('✓ Áudio carregado | Duração:', audio.duration.toFixed(0) + 's');
         });
         
+        // Inicialização
         console.log('🚀 Sistema inicializado');
+        
+        // Tenta autoplay após delay
+        setTimeout(tryAutoplay, 500);
+        
+        // Fallback: tenta novamente após 2s
+        setTimeout(() => {
+            if (!initialized) {
+                console.log('⏳ Segunda tentativa de autoplay...');
+                tryAutoplay();
+            }
+        }, 2000);
     </script>
 </body>
 </html>
