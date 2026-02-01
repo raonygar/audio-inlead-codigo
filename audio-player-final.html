@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Player InLead</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+            background: transparent;
+        }
+        #interaction-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            z-index: 999999;
+            cursor: pointer;
+            display: block;
+        }
+        #interaction-overlay.hidden {
+            display: none;
+        }
+        #audio-status {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-family: monospace;
+            z-index: 999998;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="interaction-overlay"></div>
+    <div id="audio-status">⏸ Aguardando...</div>
+    
+    <audio id="audio-player" preload="auto" style="display: none;">
+        <source src="https://raonygar.github.io/audio-inlead-codigo/Audio%20Depoimento%20-%20C%C3%B3digo.MP3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        (function() {
+            'use strict';
+            
+            const audio = document.getElementById('audio-player');
+            const overlay = document.getElementById('interaction-overlay');
+            const status = document.getElementById('audio-status');
+            
+            let audioStarted = false;
+            let audioPlaying = false;
+            
+            function startAudio() {
+                if (audioStarted) return;
+                
+                audio.currentTime = 0;
+                audio.volume = 1.0;
+                
+                audio.play()
+                    .then(() => {
+                        audioStarted = true;
+                        audioPlaying = true;
+                        overlay.classList.add('hidden');
+                        status.textContent = '▶ Tocando';
+                        console.log('✓ Áudio iniciado');
+                        startButtonMonitoring();
+                    })
+                    .catch(error => {
+                        console.warn('Autoplay bloqueado');
+                        status.textContent = '⚠ Clique';
+                    });
+            }
+            
+            function stopAudio() {
+                if (!audioPlaying) return;
+                audio.pause();
+                audio.currentTime = 0;
+                audioPlaying = false;
+                status.textContent = '⏹ Parado';
+                console.log('✓ Áudio parado');
+            }
+            
+            // Captura primeira interação
+            ['click', 'touchstart', 'mousedown', 'keydown'].forEach(event => {
+                document.addEventListener(event, function handler() {
+                    console.log('✓ Interação:', event);
+                    startAudio();
+                    ['click', 'touchstart', 'mousedown', 'keydown'].forEach(e => {
+                        document.removeEventListener(e, handler, true);
+                    });
+                }, true);
+            });
+            
+            // Tentativa de autoplay
+            setTimeout(() => {
+                audio.muted = true;
+                audio.play()
+                    .then(() => {
+                        setTimeout(() => {
+                            audio.muted = false;
+                            audio.volume = 1.0;
+                            audioStarted = true;
+                            audioPlaying = true;
+                            overlay.classList.add('hidden');
+                            console.log('✓ Autoplay OK');
+                            startButtonMonitoring();
+                        }, 100);
+                    })
+                    .catch(() => {
+                        console.log('⚠ Aguardando interação');
+                    });
+            }, 500);
+            
+            // Monitoramento do botão
+            function startButtonMonitoring() {
+                console.log('🔍 Monitorando botão...');
+                
+                // MutationObserver
+                const observer = new MutationObserver(() => {
+                    findButton();
+                });
+                
+                observer.observe(document.body, {
+                    childList: true,
+                    subtree: true
+                });
+                
+                // Busca inicial
+                findButton();
+                
+                // Listener global
+                document.addEventListener('click', function(e) {
+                    const target = e.target;
+                    if (!target.matches('button, a, input[type="submit"], [role="button"]')) {
+                        return;
+                    }
+                    
+                    const text = (target.textContent || target.value || '').toLowerCase();
+                    
+                    if ((text.includes('iniciar') && text.includes('test')) ||
+                        text === 'iniciar el test' ||
+                        text === 'comenzar el test') {
+                        console.log('🎯 Botão detectado!');
+                        stopAudio();
+                    }
+                }, true);
+                
+                console.log('✓ Sistema ativo');
+            }
+            
+            function findButton() {
+                document.querySelectorAll('button, a, input[type="submit"], [role="button"]').forEach(btn => {
+                    const text = (btn.textContent || btn.value || '').toLowerCase();
+                    
+                    if ((text.includes('iniciar') && text.includes('test')) ||
+                        text === 'iniciar el test') {
+                        if (!btn.dataset.audioListener) {
+                            console.log('✓ Botão encontrado');
+                            btn.addEventListener('click', () => {
+                                console.log('🎯 Clique no botão!');
+                                stopAudio();
+                            }, true);
+                            btn.dataset.audioListener = 'true';
+                        }
+                    }
+                });
+            }
+            
+            audio.addEventListener('ended', () => {
+                audioPlaying = false;
+                status.textContent = '✓ Finalizado';
+                console.log('✓ Fim do áudio');
+            });
+            
+            audio.addEventListener('error', () => {
+                console.error('❌ Erro ao carregar');
+                status.textContent = '❌ Erro';
+            });
+            
+        })();
+    </script>
+</body>
+</html>
+```
+
+---
+
+## 🚀 TESTE A NOVA VERSÃO
+
+Após criar o arquivo `audio-player-final.html`:
+
+**Acesse:**
+```
+https://raonygar.github.io/audio-inlead-codigo/audio-player-final.html
