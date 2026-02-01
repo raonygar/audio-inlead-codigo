@@ -3,186 +3,212 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio InLead</title>
+    <title>Audio InLead DEBUG</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
             width: 100%; 
             height: 100vh; 
             overflow: hidden; 
-            background: transparent; 
+            background: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: Arial;
         }
-        #overlay {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: transparent;
-            z-index: 999999;
+        .info {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 500px;
+        }
+        .status {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .status.playing {
+            background: #28a745;
+            color: white;
+        }
+        .status.paused {
+            background: #dc3545;
+            color: white;
+        }
+        .status.waiting {
+            background: #ffc107;
+            color: black;
+        }
+        .details {
+            margin: 15px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 14px;
+            text-align: left;
+        }
+        .details div {
+            margin: 5px 0;
+        }
+        button {
+            padding: 15px 30px;
+            margin: 10px;
+            font-size: 16px;
             cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background: #007bff;
+            color: white;
+            font-weight: bold;
         }
-        #overlay.hide { display: none; }
+        button:hover {
+            background: #0056b3;
+        }
+        button.stop {
+            background: #dc3545;
+        }
+        button.stop:hover {
+            background: #c82333;
+        }
+        .progress {
+            width: 100%;
+            height: 30px;
+            background: #e9ecef;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            background: #007bff;
+            width: 0%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
-    <div id="overlay"></div>
+    <div class="info">
+        <div class="status waiting" id="status">⏸ Clique para iniciar</div>
+        
+        <div class="progress">
+            <div class="progress-bar" id="progress">0%</div>
+        </div>
+        
+        <div class="details" id="details">
+            <div>Volume: <span id="vol">-</span></div>
+            <div>Muted: <span id="muted">-</span></div>
+            <div>Paused: <span id="paused">-</span></div>
+            <div>Current Time: <span id="time">-</span></div>
+            <div>Duration: <span id="dur">-</span></div>
+            <div>Ready State: <span id="ready">-</span></div>
+        </div>
+        
+        <button onclick="forcePlay()">▶ FORÇAR REPRODUÇÃO</button>
+        <button onclick="forceStop()" class="stop">⏹ PARAR</button>
+    </div>
+    
     <audio id="audio" preload="auto">
         <source src="https://raonygar.github.io/audio-inlead-codigo/Audio%20Depoimento%20-%20C%C3%B3digo.MP3" type="audio/mpeg">
     </audio>
 
     <script>
         const audio = document.getElementById('audio');
-        const overlay = document.getElementById('overlay');
-        let started = false;
+        const status = document.getElementById('status');
+        const progress = document.getElementById('progress');
+        
         let playing = false;
         
-        // Iniciar áudio
-        function play() {
-            if (started) return;
-            started = true;
-            
-            audio.currentTime = 0;
-            audio.volume = 1.0;
-            
-            audio.play().then(() => {
-                playing = true;
-                overlay.className = 'hide';
-                console.log('✓ Tocando');
-            }).catch(err => {
-                console.log('⚠ Bloqueado');
-                started = false;
-            });
+        function updateInfo() {
+            document.getElementById('vol').textContent = audio.volume;
+            document.getElementById('muted').textContent = audio.muted ? 'SIM ❌' : 'NÃO ✓';
+            document.getElementById('paused').textContent = audio.paused ? 'SIM' : 'NÃO';
+            document.getElementById('time').textContent = audio.currentTime.toFixed(1) + 's';
+            document.getElementById('dur').textContent = audio.duration ? audio.duration.toFixed(1) + 's' : 'carregando...';
+            document.getElementById('ready').textContent = audio.readyState;
         }
         
-        // Parar áudio
-        function stop() {
-            if (!playing) return;
+        function updateStatus(text, type) {
+            status.textContent = text;
+            status.className = 'status ' + type;
+            console.log(text);
+        }
+        
+        function forcePlay() {
+            audio.currentTime = 0;
+            audio.volume = 1.0;
+            audio.muted = false;
+            
+            updateStatus('⏳ Tentando reproduzir...', 'waiting');
+            
+            audio.play()
+                .then(() => {
+                    playing = true;
+                    updateStatus('▶ TOCANDO!', 'playing');
+                    console.log('✓ Áudio TOCANDO');
+                })
+                .catch(err => {
+                    updateStatus('❌ ERRO: ' + err.message, 'paused');
+                    console.error('Erro:', err);
+                });
+        }
+        
+        function forceStop() {
             audio.pause();
             audio.currentTime = 0;
             playing = false;
-            console.log('⏹ Parado');
+            updateStatus('⏹ PARADO', 'paused');
         }
         
-        // Captura primeira interação
-        let captured = false;
-        function capture() {
-            if (captured) return;
-            captured = true;
-            console.log('✓ Clique detectado');
-            play();
-        }
+        // Atualizar informações em tempo real
+        setInterval(updateInfo, 100);
         
-        overlay.addEventListener('click', capture);
-        overlay.addEventListener('touchstart', capture);
+        // Atualizar progresso
+        audio.addEventListener('timeupdate', () => {
+            if (audio.duration > 0) {
+                const percent = (audio.currentTime / audio.duration) * 100;
+                progress.style.width = percent + '%';
+                progress.textContent = Math.floor(percent) + '%';
+            }
+        });
         
-        // Monitorar botão
-        function monitor() {
-            if (!started) return;
-            
-            const observer = new MutationObserver(check);
-            observer.observe(document.body, { childList: true, subtree: true });
-            
-            document.addEventListener('click', (e) => {
-                const el = e.target;
-                if (!el.matches('button, a, [role="button"]')) return;
-                
-                const txt = (el.textContent || '').toLowerCase();
-                if (txt.includes('iniciar') && txt.includes('test')) {
-                    console.log('🎯 Botão!');
-                    stop();
-                }
-            }, true);
-            
-            check();
-        }
-        
-        function check() {
-            document.querySelectorAll('button, a, [role="button"]').forEach(btn => {
-                const txt = (btn.textContent || '').toLowerCase();
-                if (txt.includes('iniciar') && txt.includes('test')) {
-                    if (!btn.dataset.a) {
-                        btn.dataset.a = '1';
-                        btn.addEventListener('click', () => {
-                            console.log('🎯 Botão!');
-                            stop();
-                        }, true);
-                    }
-                }
-            });
-        }
-        
-        // Autoplay
-        setTimeout(() => {
-            audio.muted = true;
-            audio.play().then(() => {
-                setTimeout(() => {
-                    audio.muted = false;
-                    started = true;
-                    playing = true;
-                    overlay.className = 'hide';
-                    captured = true;
-                    monitor();
-                }, 100);
-            }).catch(() => {});
-        }, 300);
-        
-        // Iniciar monitor após primeira interação
         audio.addEventListener('play', () => {
-            if (started && !captured) captured = true;
-            monitor();
-        }, { once: true });
+            updateStatus('▶ TOCANDO!', 'playing');
+        });
+        
+        audio.addEventListener('pause', () => {
+            if (!playing) return;
+            updateStatus('⏸ PAUSADO', 'paused');
+        });
         
         audio.addEventListener('ended', () => {
             playing = false;
-            console.log('✓ Fim');
+            updateStatus('✓ FINALIZADO', 'waiting');
         });
+        
+        audio.addEventListener('error', (e) => {
+            updateStatus('❌ ERRO AO CARREGAR', 'paused');
+            console.error('Erro:', e);
+        });
+        
+        audio.addEventListener('loadeddata', () => {
+            console.log('✓ Áudio carregado');
+            updateInfo();
+        });
+        
+        // Inicialização
+        updateInfo();
+        updateStatus('⏸ Clique no botão FORÇAR REPRODUÇÃO', 'waiting');
     </script>
 </body>
 </html>
-```
-
----
-
-## 🧪 TESTE AGORA
-
-1. **Atualize** o arquivo no GitHub
-2. **Aguarde** 2 minutos
-3. **Acesse:** `https://raonygar.github.io/audio-inlead-codigo/audio-player-final.html`
-4. **Clique** na página
-5. **Deve ouvir** o áudio tocando
-
----
-
-## 🎯 O QUE MUDEI
-
-### **Problemas da versão anterior:**
-- ❌ Event listeners não removidos corretamente
-- ❌ Função `startAudio()` chamada múltiplas vezes
-- ❌ Race condition entre autoplay e clique manual
-
-### **Soluções aplicadas:**
-- ✅ Flag `captured` impede múltiplas chamadas
-- ✅ Código ultra-simplificado (menos bugs)
-- ✅ Uma única verificação por evento
-- ✅ Autoplay e manual não entram em conflito
-
----
-
-## 📋 O QUE VOCÊ DEVE VER NO CONSOLE
-
-### **Sequência correta:**
-
-**Se autoplay funcionar:**
-```
-(autoplay automático - sem mensagem)
-```
-
-**Se autoplay bloquear:**
-```
-✓ Clique detectado
-✓ Tocando
-```
-
-**Ao clicar no botão "Iniciar el test":**
-```
-🎯 Botão!
-⏹ Parado
