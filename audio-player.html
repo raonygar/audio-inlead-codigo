@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Player InLead</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+            background: transparent;
+        }
+        /* Overlay invisível para capturar primeira interação */
+        #interaction-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            z-index: 999999;
+            cursor: pointer;
+            display: block;
+        }
+        #interaction-overlay.hidden {
+            display: none;
+        }
+        /* Indicador visual opcional (pode remover) */
+        #audio-status {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-family: monospace;
+            z-index: 999998;
+            display: none; /* Oculto por padrão */
+        }
+    </style>
+</head>
+<body>
+    <!-- Overlay para capturar primeira interação -->
+    <div id="interaction-overlay"></div>
+    
+    <!-- Status (opcional, para debug) -->
+    <div id="audio-status">⏸ Aguardando interação...</div>
+    
+    <!-- Elemento de áudio (invisível) -->
+    <audio id="audio-player" preload="auto" style="display: none;">
+        <source src="https://raonygar.github.io/audio-inlead-codigo/Audio%20Depoimento%20-%20C%C3%B3digo.MP3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        (function() {
+            'use strict';
+            
+            const audio = document.getElementById('audio-player');
+            const overlay = document.getElementById('interaction-overlay');
+            const status = document.getElementById('audio-status');
+            
+            let audioStarted = false;
+            let audioPlaying = false;
+            let buttonFound = false;
+            
+            // ========================================
+            // 1. SISTEMA DE INICIALIZAÇÃO DO ÁUDIO
+            // ========================================
+            
+            // Função para iniciar o áudio
+            async function startAudio() {
+                if (audioStarted) return;
+                
+                try {
+                    audio.currentTime = 0;
+                    audio.volume = 1.0;
+                    
+                    const playPromise = audio.play();
+                    
+                    if (playPromise !== undefined) {
+                        await playPromise;
+                        audioStarted = true;
+                        audioPlaying = true;
+                        overlay.classList.add('hidden');
+                        updateStatus('▶ Áudio reproduzindo');
+                        console.log('✓ Áudio iniciado com sucesso');
+                        
+                        // Inicia monitoramento do botão
+                        startButtonMonitoring();
+                    }
+                } catch (error) {
+                    console.warn('Autoplay bloqueado:', error.message);
+                    updateStatus('⚠ Clique para iniciar');
+                }
+            }
+            
+            // Função para parar o áudio
+            function stopAudio() {
+                if (!audioPlaying) return;
+                
+                audio.pause();
+                audio.currentTime = 0;
+                audioPlaying = false;
+                updateStatus('⏹ Áudio parado');
+                console.log('✓ Áudio parado pelo botão');
+            }
+            
+            // Atualizar status visual (opcional)
+            function updateStatus(message) {
+                status.textContent = message;
+                // status.style.display = 'block'; // Descomente para debug
+            }
+            
+            // ========================================
+            // 2. CAPTURA DE PRIMEIRA INTERAÇÃO
+            // ========================================
+            
+            // Eventos para detectar primeira interação do usuário
+            const interactionEvents = ['click', 'touchstart', 'touchend', 'mousedown', 'keydown'];
+            
+            function handleFirstInteraction(e) {
+                console.log('✓ Primeira interação detectada:', e.type);
+                startAudio();
+                
+                // Remove listeners após primeira interação
+                interactionEvents.forEach(event => {
+                    document.removeEventListener(event, handleFirstInteraction, true);
+                    overlay.removeEventListener(event, handleFirstInteraction);
+                });
+            }
+            
+            // Adiciona listeners para todas as interações possíveis
+            interactionEvents.forEach(event => {
+                document.addEventListener(event, handleFirstInteraction, true);
+                overlay.addEventListener(event, handleFirstInteraction);
+            });
+            
+            // ========================================
+            // 3. TENTATIVA DE AUTOPLAY (muted primeiro)
+            // ========================================
+            
+            async function tryAutoplay() {
+                try {
+                    // Tenta com volume baixo primeiro (maior chance de sucesso)
+                    audio.volume = 0.1;
+                    audio.muted = true;
+                    
+                    await audio.play();
+                    
+                    // Se funcionou, aumenta volume e desmuta
+                    setTimeout(() => {
+                        audio.muted = false;
+                        audio.volume = 1.0;
+                        audioStarted = true;
+                        audioPlaying = true;
+                        overlay.classList.add('hidden');
+                        updateStatus('▶ Autoplay ativo');
+                        console.log('✓ Autoplay funcionou!');
+                        startButtonMonitoring();
+                    }, 100);
+                    
+                } catch (error) {
+                    console.log('⚠ Autoplay bloqueado, aguardando interação...');
+                    updateStatus('👆 Toque para iniciar');
+                }
+            }
+            
+            // ========================================
+            // 4. MONITORAMENTO DO BOTÃO "Iniciar el test"
+            // ========================================
+            
+            let buttonObserver = null;
+            let clickListenerAdded = false;
+            
+            function startButtonMonitoring() {
+                console.log('🔍 Iniciando monitoramento do botão...');
+                
+                // Tenta encontrar o botão imediatamente
+                findAndAttachToButton();
+                
+                // Monitora mudanças no DOM (para quiz dinâmico)
+                setupMutationObserver();
+                
+                // Listener global para cliques (fallback)
+                setupGlobalClickListener();
+            }
+            
+            function findAndAttachToButton() {
+                // Busca por múltiplos seletores possíveis
+                const selectors = [
+                    'button:contains("Iniciar el test")',
+                    'button[type="submit"]',
+                    'a:contains("Iniciar")',
+                    '[class*="start"]',
+                    '[class*="begin"]',
+                    '[id*="start"]',
+                    'button, a[role="button"], input[type="submit"]'
+                ];
+                
+                // Função helper para verificar texto
+                function containsText(element, text) {
+                    return element.textContent.toLowerCase().includes(text.toLowerCase());
+                }
+                
+                // Busca todos os botões e links
+                const allButtons = document.querySelectorAll('button, a, input[type="submit"], [role="button"]');
+                
+                allButtons.forEach(button => {
+                    const text = button.textContent || button.value || '';
+                    
+                    if (
+                        text.toLowerCase().includes('iniciar') ||
+                        text.toLowerCase().includes('comenzar') ||
+                        text.toLowerCase().includes('empezar') ||
+                        text.toLowerCase().includes('start') ||
+                        text.toLowerCase().includes('test')
+                    ) {
+                        if (!button.dataset.audioListener) {
+                            console.log('✓ Botão encontrado:', text.trim());
+                            button.addEventListener('click', handleButtonClick, true);
+                            button.dataset.audioListener = 'true';
+                            buttonFound = true;
+                        }
+                    }
+                });
+            }
+            
+            function handleButtonClick(e) {
+                console.log('🎯 Clique no botão detectado!');
+                stopAudio();
+            }
+            
+            // MutationObserver para DOM dinâmico
+            function setupMutationObserver() {
+                if (buttonObserver) return;
+                
+                buttonObserver = new MutationObserver((mutations) => {
+                    findAndAttachToButton();
+                });
+                
+                buttonObserver.observe(document.body, {
+                    childList: true,
+                    subtree: true,
+                    attributes: false
+                });
+                
+                console.log('✓ MutationObserver ativo');
+            }
+            
+            // Listener global como fallback
+            function setupGlobalClickListener() {
+                if (clickListenerAdded) return;
+                
+                document.addEventListener('click', function(e) {
+                    const target = e.target;
+                    const text = target.textContent || target.value || '';
+                    
+                    if (
+                        text.toLowerCase().includes('iniciar') ||
+                        text.toLowerCase().includes('test') ||
+                        text.toLowerCase().includes('comenzar')
+                    ) {
+                        console.log('🎯 Clique global detectado no botão');
+                        stopAudio();
+                    }
+                }, true);
+                
+                clickListenerAdded = true;
+                console.log('✓ Global click listener ativo');
+            }
+            
+            // ========================================
+            // 5. INICIALIZAÇÃO
+            // ========================================
+            
+            // Espera DOM carregar
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', init);
+            } else {
+                init();
+            }
+            
+            function init() {
+                console.log('🚀 Sistema de áudio inicializado');
+                
+                // Tenta autoplay após pequeno delay
+                setTimeout(() => {
+                    tryAutoplay();
+                }, 500);
+                
+                // Fallback: se após 2s não iniciou, força captura de interação
+                setTimeout(() => {
+                    if (!audioStarted) {
+                        console.log('⏳ Aguardando interação do usuário...');
+                        updateStatus('👆 Clique para iniciar áudio');
+                    }
+                }, 2000);
+            }
+            
+            // ========================================
+            // 6. EVENTOS DO ÁUDIO
+            // ========================================
+            
+            audio.addEventListener('ended', () => {
+                audioPlaying = false;
+                updateStatus('✓ Áudio finalizado');
+                console.log('✓ Áudio finalizado naturalmente');
+            });
+            
+            audio.addEventListener('error', (e) => {
+                console.error('❌ Erro ao carregar áudio:', e);
+                updateStatus('❌ Erro ao carregar');
+            });
+            
+        })();
+    </script>
+</body>
+</html>
